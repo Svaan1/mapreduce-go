@@ -1,3 +1,5 @@
 *.so
-/tmp
+
+tmp
+out
 main

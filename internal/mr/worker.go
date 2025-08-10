@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"log"
@@ -38,57 +39,74 @@ func (w *Worker) Work() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		task, err := w.CallGetTask()
+		task, err := w.GetTask()
 		if err != nil {
 			log.Printf("Failed to get task %v", err)
 		}
 
 		if task.MapTask != nil {
-			log.Printf("Successfully got task %d", task.MapTask.ID)
+			log.Printf("Successfully got map task %d", task.MapTask.ID)
 
-			keyValues := w.mapf(task.MapTask.Filename, task.MapTask.Contents)
+			w.ExecuteMapTask(task.MapTask)
+		}
 
-			// Separate all key values into `nReduce` values
-			intermediateKeys := make(map[int][]KeyValue)
-			for _, kv := range keyValues {
-				reduceID := ihash(kv.Key) % task.MapTask.NReduce
-
-				v, exists := intermediateKeys[reduceID]
-				if !exists {
-					intermediateKeys[reduceID] = []KeyValue{kv}
-					continue
-				}
-
-				intermediateKeys[reduceID] = append(v, kv)
-			}
-
-			// Write all buckets into files
-			for reduceID, value := range intermediateKeys {
-				filename := fmt.Sprintf("mr-%d-%d", task.MapTask.ID, reduceID)
-
-				file, err := os.Create(filename)
-				if err != nil {
-					log.Printf("Failed to create file %s: %v", filename, err)
-					continue
-				}
-
-				for _, kv := range value {
-					_, err := fmt.Fprintf(file, "%d - %d, %s, %s\n", task.MapTask.ID, reduceID, kv.Key, kv.Value)
-					if err != nil {
-						log.Printf("Failed to write to file %s: %v", filename, err)
-						break
-					}
-				}
-
-				file.Close()
-			}
+		if task.ReduceTask != nil {
+			log.Printf("Successfully got reduce task %v", task.ReduceTask)
 
 		}
 
 	}
 }
 
-func (w *Worker) CallGetTask() (GetTaskReply, error) {
+func (w *Worker) ExecuteMapTask(m *MapTask) {
+	keyValues := w.mapf(m.Filename, m.Contents)
+
+	// TODO: create temporary file instead and rename it on completion
+
+	// Separate all key values into `nReduce` buckets
+	buckets := make(map[int]map[string][]string)
+	for _, kv := range keyValues {
+		reduceID := ihash(kv.Key) % m.NReduce
+
+		bucket, exists := buckets[reduceID]
+		if !exists {
+			bucket = make(map[string][]string)
+		}
+
+		values, exists := bucket[kv.Key]
+		if !exists {
+			values = []string{}
+		}
+
+		values = append(values, kv.Value)
+		bucket[kv.Key] = values
+		buckets[reduceID] = bucket
+	}
+
+	// Write all buckets into files
+	for id, bucket := range buckets {
+		filename := fmt.Sprintf("out/mr-%d-%d", m.ID, id)
+
+		file, err := os.Create(filename)
+		if err != nil {
+			log.Printf("Failed to create file %s: %v", filename, err)
+			continue
+		}
+
+		enc := json.NewEncoder(file)
+		enc.SetIndent("", "  ")
+
+		if err := enc.Encode(bucket); err != nil {
+			log.Printf("Failed to write JSON: %v", err)
+		}
+
+		file.Close()
+	}
+
+	w.CompleteMapTask(m.ID)
+}
+
+func (w *Worker) GetTask() (GetTaskReply, error) {
 	args := struct{}{}
 	reply := GetTaskReply{}
 
@@ -97,6 +115,17 @@ func (w *Worker) CallGetTask() (GetTaskReply, error) {
 	}
 
 	return reply, nil
+}
+
+func (w *Worker) CompleteMapTask(taskID int) error {
+	args := CompleteTaskArgs{TaskID: taskID}
+	reply := struct{}{}
+
+	if ok := w.call("Coordinator.CompleteTask", &args, &reply); !ok {
+		return fmt.Errorf("failed to call Coordinator.CompleteTask")
+	}
+
+	return nil
 }
 
 func (w *Worker) connect() {
