@@ -5,6 +5,9 @@ PLUGINS := plugins/wc plugins/indexer plugins/mtiming plugins/rtiming plugins/jo
 
 .PHONY: build clean
 
+sandbox:
+	go run cmd/sandbox/main.go
+
 build: clean
 	@set -e; \
 	for d in $(CMDS); do (cd $$d && go clean); done; \

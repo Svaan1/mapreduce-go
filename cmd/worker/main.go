@@ -27,7 +27,8 @@ func main() {
 
 	mapf, reducef := loadPlugin(os.Args[1])
 
-	mr.Worker(mapf, reducef)
+	w := mr.NewWorker(mapf, reducef)
+	w.Work()
 }
 
 // load the application Map and Reduce functions
@@ -35,7 +36,7 @@ func main() {
 func loadPlugin(filename string) (func(string, string) []mr.KeyValue, func(string, []string) string) {
 	p, err := plugin.Open(filename)
 	if err != nil {
-		log.Fatalf("cannot load plugin %v", filename)
+		log.Fatalf("cannot load plugin %v %v", filename, err)
 	}
 	xmapf, err := p.Lookup("Map")
 	if err != nil {

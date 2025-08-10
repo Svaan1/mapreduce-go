@@ -1,35 +1,32 @@
 package mr
 
-//
-// RPC definitions.
-//
-// remember to capitalize all names.
-//
-
 import (
 	"os"
 	"strconv"
 )
 
 //
-// example to show how to declare the arguments
-// and reply for an RPC.
+// RPC definitions.
+//
+// remember to capitalize all names.
 //
 
-type ExampleArgs struct {
-	X int
+type GetTaskReply struct {
+	MapTask    *MapTask
+	ReduceTask *ReduceTask
 }
 
-type ExampleReply struct {
-	Y int
+func (c *Coordinator) GetTask(_ struct{}, reply *GetTaskReply) error {
+	reply.MapTask = c.MQ.FetchIdleTask()
+	reply.ReduceTask = nil
+
+	return nil
 }
 
-// Add your RPC definitions here.
+func (c *Coordinator) Done() bool {
+	return false
+}
 
-// Cook up a unique-ish UNIX-domain socket name
-// in /var/tmp, for the coordinator.
-// Can't use the current directory since
-// Athena AFS doesn't support UNIX-domain sockets.
 func coordinatorSock() string {
 	s := "/var/tmp/5840-mr-"
 	s += strconv.Itoa(os.Getuid())
