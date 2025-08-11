@@ -12,7 +12,6 @@ type MapTask struct {
 	ID       int
 	NReduce  int
 	Filename string
-	Contents string
 }
 
 type MapQueue struct {
@@ -54,7 +53,7 @@ func (mq *MapQueue) FetchIdleTask() *MapTask {
 	mq.idle = mq.idle[1:]
 	mq.pending = append(mq.pending, task)
 
-	go mq.track(task)
+	go mq.trackCompletion(task)
 
 	return task
 }
@@ -81,7 +80,7 @@ func (mq *MapQueue) Done() bool {
 		len(mq.completed) == mq.amount
 }
 
-func (mq *MapQueue) track(mt *MapTask) {
+func (mq *MapQueue) trackCompletion(mt *MapTask) {
 	timer := time.NewTimer(taskTimeout)
 	defer timer.Stop()
 	<-timer.C

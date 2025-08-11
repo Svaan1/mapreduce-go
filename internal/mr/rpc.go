@@ -1,32 +1,47 @@
 package mr
 
 import (
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
 	"os"
 	"strconv"
 )
 
-type GetTaskReply struct {
-	MapTask    *MapTask
-	ReduceTask *ReduceTask
+func (c *Coordinator) server() {
+	rpc.Register(c)
+	rpc.HandleHTTP()
+	//l, e := net.Listen("tcp", ":1234")
+	sockname := coordinatorSock()
+	os.Remove(sockname)
+	l, e := net.Listen("unix", sockname)
+	if e != nil {
+		log.Fatal("listen error:", e)
+	}
+	go http.Serve(l, nil)
 }
 
-type CompleteTaskArgs struct {
-	TaskID int
+func (w *Worker) connect() {
+	// c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
+	sockname := coordinatorSock()
+	c, err := rpc.DialHTTP("unix", sockname)
+	if err != nil {
+		log.Fatal("dialing:", err)
+	}
+
+	w.client = c
 }
 
-func (c *Coordinator) GetTask(_ struct{}, reply *GetTaskReply) error {
-	reply.MapTask = c.MQ.FetchIdleTask()
-	reply.ReduceTask = nil
-	return nil
-}
+func (w *Worker) call(rpcname string, args interface{}, reply interface{}) bool {
+	err := w.client.Call(rpcname, args, reply)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
 
-func (c *Coordinator) CompleteTask(args CompleteTaskArgs, _ *struct{}) error {
-	c.MQ.CompleteTask(args.TaskID)
-	return nil
-}
-
-func (c *Coordinator) Done() bool {
-	return false
+	return true
 }
 
 func coordinatorSock() string {

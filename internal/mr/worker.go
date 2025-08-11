@@ -39,29 +39,41 @@ func (w *Worker) Work() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		task, err := w.GetTask()
+		task, err := w.getTask()
 		if err != nil {
 			log.Printf("Failed to get task %v", err)
 		}
 
 		if task.MapTask != nil {
 			log.Printf("Successfully got map task %d", task.MapTask.ID)
-
-			w.ExecuteMapTask(task.MapTask)
+			w.executeMapTask(task.MapTask)
 		}
 
 		if task.ReduceTask != nil {
 			log.Printf("Successfully got reduce task %v", task.ReduceTask)
-
+			w.executeReduceTask(task.ReduceTask)
 		}
-
 	}
 }
 
-func (w *Worker) ExecuteMapTask(m *MapTask) {
-	keyValues := w.mapf(m.Filename, m.Contents)
+func (w *Worker) getTask() (GetTaskReply, error) {
+	args := struct{}{}
+	reply := GetTaskReply{}
 
-	// TODO: create temporary file instead and rename it on completion
+	if ok := w.call("Coordinator.GetTask", &args, &reply); !ok {
+		return reply, fmt.Errorf("failed to call Coordinator.GetTask")
+	}
+
+	return reply, nil
+}
+
+func (w *Worker) executeMapTask(m *MapTask) {
+	contents, err := os.ReadFile(m.Filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	keyValues := w.mapf(m.Filename, string(contents))
 
 	// Separate all key values into `nReduce` buckets
 	buckets := make(map[int]map[string][]string)
@@ -84,8 +96,13 @@ func (w *Worker) ExecuteMapTask(m *MapTask) {
 	}
 
 	// Write all buckets into files
-	for id, bucket := range buckets {
-		filename := fmt.Sprintf("out/mr-%d-%d", m.ID, id)
+	for bucketID, bucket := range buckets {
+		dir := fmt.Sprintf("out/intermediate/reduce-%d", bucketID)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Printf("Failed to create directory %s: %v", dir, err)
+		}
+
+		filename := fmt.Sprintf("%s/map-%d", dir, m.ID)
 
 		file, err := os.Create(filename)
 		if err != nil {
@@ -103,50 +120,83 @@ func (w *Worker) ExecuteMapTask(m *MapTask) {
 		file.Close()
 	}
 
-	w.CompleteMapTask(m.ID)
+	w.callCompleteMapTask(m.ID)
 }
 
-func (w *Worker) GetTask() (GetTaskReply, error) {
-	args := struct{}{}
-	reply := GetTaskReply{}
-
-	if ok := w.call("Coordinator.GetTask", &args, &reply); !ok {
-		return reply, fmt.Errorf("failed to call Coordinator.GetTask")
+func (w *Worker) executeReduceTask(r *ReduceTask) {
+	dir := fmt.Sprintf("out/intermediate/reduce-%d", r.ID)
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		log.Printf("Failed to read directory %s: %v", dir, err)
+		return
 	}
 
-	return reply, nil
+	kvMap := make(map[string][]string)
+
+	for _, file := range files {
+		fpath := fmt.Sprintf("%s/%s", dir, file.Name())
+		f, err := os.Open(fpath)
+		if err != nil {
+			log.Printf("Failed to open file %s: %v", fpath, err)
+			continue
+		}
+
+		var bucket map[string][]string
+		if err := json.NewDecoder(f).Decode(&bucket); err != nil {
+			log.Printf("Failed to decode JSON from %s: %v", fpath, err)
+			f.Close()
+			continue
+		}
+		f.Close()
+
+		for k, vs := range bucket {
+			kvMap[k] = append(kvMap[k], vs...)
+		}
+	}
+
+	// Apply reduce function and write output
+	outDir := "out/final"
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		log.Printf("Failed to create output directory %s: %v", outDir, err)
+		return
+	}
+
+	outFile := fmt.Sprintf("%s/%d", outDir, r.ID)
+	file, err := os.Create(outFile)
+	if err != nil {
+		log.Printf("Failed to create output file %s: %v", outFile, err)
+		return
+	}
+	defer file.Close()
+
+	for k, vs := range kvMap {
+		output := w.reducef(k, vs)
+		fmt.Fprintf(file, "%v %v\n", k, output)
+	}
+
+	w.callCompleteReduceTask(r.ID)
 }
 
-func (w *Worker) CompleteMapTask(taskID int) error {
+func (w *Worker) callCompleteMapTask(taskID int) error {
 	args := CompleteTaskArgs{TaskID: taskID}
 	reply := struct{}{}
 
-	if ok := w.call("Coordinator.CompleteTask", &args, &reply); !ok {
-		return fmt.Errorf("failed to call Coordinator.CompleteTask")
+	if ok := w.call("Coordinator.CompleteMapTask", &args, &reply); !ok {
+		return fmt.Errorf("failed to call Coordinator.CompleteMapTask")
 	}
 
 	return nil
 }
 
-func (w *Worker) connect() {
-	// c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
-	sockname := coordinatorSock()
-	c, err := rpc.DialHTTP("unix", sockname)
-	if err != nil {
-		log.Fatal("dialing:", err)
+func (w *Worker) callCompleteReduceTask(taskID int) error {
+	args := CompleteTaskArgs{TaskID: taskID}
+	reply := struct{}{}
+
+	if ok := w.call("Coordinator.CompleteReduceTask", &args, &reply); !ok {
+		return fmt.Errorf("failed to call Coordinator.CompleteReduceTask")
 	}
 
-	w.client = c
-}
-
-func (w *Worker) call(rpcname string, args interface{}, reply interface{}) bool {
-	err := w.client.Call(rpcname, args, reply)
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-
-	return true
+	return nil
 }
 
 // use ihash(key) % NReduce to choose the reduce
