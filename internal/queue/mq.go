@@ -91,7 +91,7 @@ func (mq *MapQueue) trackCompletion(mt *MapTask) {
 		if task.ID == mt.ID {
 			mq.pending = append(mq.pending[:i], mq.pending[i+1:]...)
 			mq.idle = append(mq.idle, mt)
-			break
+			return
 		}
 	}
 }

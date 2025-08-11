@@ -8,8 +8,9 @@ import (
 )
 
 type GetTaskReply struct {
-	MapTask    *queue.MapTask
-	ReduceTask *queue.ReduceTask
+	MapTask     *queue.MapTask
+	ReduceTask  *queue.ReduceTask
+	ProcessDone bool
 }
 
 type CompleteTaskArgs struct {
@@ -22,6 +23,8 @@ func (c *Coordinator) GetTask(_ struct{}, reply *GetTaskReply) error {
 	} else if !c.rq.Done() {
 		reply.ReduceTask = c.rq.FetchIdleTask()
 	}
+
+	reply.ProcessDone = c.Done()
 
 	return nil
 }
@@ -37,7 +40,7 @@ func (c *Coordinator) CompleteReduceTask(args CompleteTaskArgs, _ *struct{}) err
 }
 
 func (c *Coordinator) Done() bool {
-	return false
+	return c.mq.Done() && c.rq.Done()
 }
 
 func CoordinatorSock() string {

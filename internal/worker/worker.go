@@ -39,7 +39,11 @@ func (w *Worker) Work() {
 	for range ticker.C {
 		task, err := w.callGetTask()
 		if err != nil {
-			log.Printf("Failed to get task %v", err)
+			log.Fatalf("Failed to get task %v", err)
+		}
+
+		if task.ProcessDone {
+			return
 		}
 
 		if task.MapTask != nil {
@@ -115,6 +119,7 @@ func (w *Worker) executeReduceTask(r *queue.ReduceTask) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		log.Printf("Failed to read directory %s: %v", dir, err)
+		w.callCompleteReduceTask(r.ID)
 		return
 	}
 

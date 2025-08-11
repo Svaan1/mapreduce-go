@@ -51,34 +51,14 @@ then
   TIMEOUT+=" -k 2s 45s "
 fi
 
+# make sure software is freshly built.
+(make build)  || exit 1
+
 # run the test in a fresh sub-directory.
 rm -rf tmp
 mkdir tmp || exit 1
 cd tmp || exit 1
 rm -f mr-*
-
-# make sure software is freshly built.
-(cd ../cmd/coordinator && go clean) || exit 1
-(cd ../cmd/sequential && go clean) || exit 1
-(cd ../cmd/worker && go clean) || exit 1
-
-# build the entries
-(cd ../cmd/coordinator && go build $RACE main.go) || exit 1
-(cd ../cmd/sequential && go build $RACE main.go) || exit 1
-(cd ../cmd/worker && go build $RACE main.go) || exit 1
-
-# build the plugins
-(cd ../plugins/wc         && go build $RACE -buildmode=plugin wc.go) || exit 1
-(cd ../plugins/indexer    && go build $RACE -buildmode=plugin indexer.go) || exit 1
-(cd ../plugins/mtiming    && go build $RACE -buildmode=plugin mtiming.go) || exit 1
-(cd ../plugins/rtiming    && go build $RACE -buildmode=plugin rtiming.go) || exit 1
-(cd ../plugins/jobcount   && go build $RACE -buildmode=plugin jobcount.go) || exit 1
-(cd ../plugins/early_exit && go build $RACE -buildmode=plugin early_exit.go) || exit 1
-(cd ../plugins/crash      && go build $RACE -buildmode=plugin crash.go) || exit 1
-(cd ../plugins/nocrash    && go build $RACE -buildmode=plugin nocrash.go) || exit 1
-
-
-failed_any=0
 
 #########################################################
 # first word-count
@@ -86,7 +66,7 @@ failed_any=0
 # generate the correct output
 ../cmd/sequential/main ../plugins/wc/wc.so ../data/pg*txt || exit 1
 sort mr-out-0 > mr-correct-wc.txt
-rm -f mr-out*
+rm -f out/final/*
 
 echo '***' Starting wc test.
 
@@ -106,7 +86,7 @@ wait $pid
 
 # since workers are required to exit when a job is completely finished,
 # and not before, that means the job has finished.
-sort mr-out* | grep . > mr-wc-all
+sort out/final/* | grep . > mr-wc-all
 if cmp mr-wc-all mr-correct-wc.txt
 then
   echo '---' wc test: PASS
@@ -126,7 +106,7 @@ rm -f mr-*
 # generate the correct output
 ../cmd/sequential/main ../plugins/indexer/indexer.so ../data/pg*txt || exit 1
 sort mr-out-0 > mr-correct-indexer.txt
-rm -f mr-out*
+rm -f out/final/*
 
 echo '***' Starting indexer test.
 
@@ -137,7 +117,7 @@ sleep 1
 maybe_quiet $TIMEOUT ../cmd/worker/main ../plugins/indexer/indexer.so &
 maybe_quiet $TIMEOUT ../cmd/worker/main ../plugins/indexer/indexer.so
 
-sort mr-out* | grep . > mr-indexer-all
+sort out/final/* | grep . > mr-indexer-all
 if cmp mr-indexer-all mr-correct-indexer.txt
 then
   echo '---' indexer test: PASS
@@ -160,7 +140,7 @@ sleep 1
 maybe_quiet $TIMEOUT ../cmd/worker/main ../plugins/mtiming/mtiming.so &
 maybe_quiet $TIMEOUT ../cmd/worker/main ../plugins/mtiming/mtiming.so
 
-NT=`cat mr-out* | grep '^times-' | wc -l | sed 's/ //g'`
+NT=`cat out/final/* | grep '^times-' | wc -l | sed 's/ //g'`
 if [ "$NT" != "2" ]
 then
   echo '---' saw "$NT" workers rather than 2
@@ -168,7 +148,7 @@ then
   failed_any=1
 fi
 
-if cat mr-out* | grep '^parallel.* 2' > /dev/null
+if cat out/final/* | grep '^parallel.* 2' > /dev/null
 then
   echo '---' map parallelism test: PASS
 else
@@ -191,7 +171,7 @@ sleep 1
 maybe_quiet $TIMEOUT ../cmd/worker/main ../plugins/rtiming/rtiming.so  &
 maybe_quiet $TIMEOUT ../cmd/worker/main ../plugins/rtiming/rtiming.so
 
-NT=`cat mr-out* | grep '^[a-z] 2' | wc -l | sed 's/ //g'`
+NT=`cat out/final/* | grep '^[a-z] 2' | wc -l | sed 's/ //g'`
 if [ "$NT" -lt "2" ]
 then
   echo '---' too few parallel reduces.
@@ -216,7 +196,7 @@ maybe_quiet $TIMEOUT ../cmd/worker/main ../plugins/jobcount/jobcount.so
 maybe_quiet $TIMEOUT ../cmd/worker/main ../plugins/jobcount/jobcount.so &
 maybe_quiet $TIMEOUT ../cmd/worker/main ../plugins/jobcount/jobcount.so
 
-NT=`cat mr-out* | awk '{print $2}'`
+NT=`cat out/final/* | awk '{print $2}'`
 if [ "$NT" -eq "8" ]
 then
   echo '---' job count test: PASS
@@ -269,13 +249,13 @@ rm -f $DF
 
 # a process has exited. this means that the output should be finalized
 # otherwise, either a worker or the coordinator exited early
-sort mr-out* | grep . > mr-wc-all-initial
+sort out/final/* | grep . > mr-wc-all-initial
 
 # wait for remaining workers and coordinator to exit.
 wait
 
 # compare initial and final outputs
-sort mr-out* | grep . > mr-wc-all-final
+sort out/final/* | grep . > mr-wc-all-final
 if cmp mr-wc-all-final mr-wc-all-initial
 then
   echo '---' early exit test: PASS
@@ -292,7 +272,7 @@ echo '***' Starting crash test.
 # generate the correct output
 ../cmd/sequential/main ../plugins/nocrash.so ../data/pg*txt || exit 1
 sort mr-out-0 > mr-correct-crash.txt
-rm -f mr-out*
+rm -f out/final/*
 
 rm -f mr-done
 ((maybe_quiet $TIMEOUT2 ../cmd/coordinator/main ../data/pg*txt); touch mr-done ) &
@@ -325,7 +305,7 @@ done
 wait
 
 rm $SOCKNAME
-sort mr-out* | grep . > mr-crash-all
+sort out/final/* | grep . > mr-crash-all
 if cmp mr-crash-all mr-correct-crash.txt
 then
   echo '---' crash test: PASS
