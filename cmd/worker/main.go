@@ -17,6 +17,7 @@ import (
 	"plugin"
 
 	"github.com/svaan1/map-reduce-go/internal/mr"
+	"github.com/svaan1/map-reduce-go/internal/worker"
 )
 
 func main() {
@@ -27,7 +28,7 @@ func main() {
 
 	mapf, reducef := loadPlugin(os.Args[1])
 
-	w := mr.NewWorker(mapf, reducef)
+	w := worker.NewWorker(mapf, reducef)
 	w.Work()
 }
 

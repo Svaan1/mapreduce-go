@@ -1,7 +1,8 @@
-package mr
+package queue
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 )
 
@@ -23,10 +24,8 @@ func (rq *ReduceQueue) AddNewTask(mt *ReduceTask) error {
 	rq.mu.Lock()
 	defer rq.mu.Unlock()
 
-	for _, id := range rq.ids {
-		if id == mt.ID {
-			return fmt.Errorf("task with ID %d already exists", mt.ID)
-		}
+	if slices.Contains(rq.ids, mt.ID) {
+		return fmt.Errorf("task with ID %d already exists", mt.ID)
 	}
 
 	rq.ids = append(rq.ids, mt.ID)

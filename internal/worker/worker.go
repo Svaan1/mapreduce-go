@@ -1,4 +1,4 @@
-package mr
+package worker
 
 import (
 	"encoding/json"
@@ -8,20 +8,18 @@ import (
 	"net/rpc"
 	"os"
 	"time"
-)
 
-type KeyValue struct {
-	Key   string
-	Value string
-}
+	"github.com/svaan1/map-reduce-go/internal/mr"
+	"github.com/svaan1/map-reduce-go/internal/queue"
+)
 
 type Worker struct {
 	client  *rpc.Client
-	mapf    func(string, string) []KeyValue
+	mapf    func(string, string) []mr.KeyValue
 	reducef func(string, []string) string
 }
 
-func NewWorker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) Worker {
+func NewWorker(mapf func(string, string) []mr.KeyValue, reducef func(string, []string) string) Worker {
 	w := Worker{
 		client:  nil,
 		mapf:    mapf,
@@ -39,7 +37,7 @@ func (w *Worker) Work() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		task, err := w.getTask()
+		task, err := w.callGetTask()
 		if err != nil {
 			log.Printf("Failed to get task %v", err)
 		}
@@ -56,18 +54,7 @@ func (w *Worker) Work() {
 	}
 }
 
-func (w *Worker) getTask() (GetTaskReply, error) {
-	args := struct{}{}
-	reply := GetTaskReply{}
-
-	if ok := w.call("Coordinator.GetTask", &args, &reply); !ok {
-		return reply, fmt.Errorf("failed to call Coordinator.GetTask")
-	}
-
-	return reply, nil
-}
-
-func (w *Worker) executeMapTask(m *MapTask) {
+func (w *Worker) executeMapTask(m *queue.MapTask) {
 	contents, err := os.ReadFile(m.Filename)
 	if err != nil {
 		log.Fatal(err)
@@ -123,7 +110,7 @@ func (w *Worker) executeMapTask(m *MapTask) {
 	w.callCompleteMapTask(m.ID)
 }
 
-func (w *Worker) executeReduceTask(r *ReduceTask) {
+func (w *Worker) executeReduceTask(r *queue.ReduceTask) {
 	dir := fmt.Sprintf("out/intermediate/reduce-%d", r.ID)
 	files, err := os.ReadDir(dir)
 	if err != nil {
@@ -175,28 +162,6 @@ func (w *Worker) executeReduceTask(r *ReduceTask) {
 	}
 
 	w.callCompleteReduceTask(r.ID)
-}
-
-func (w *Worker) callCompleteMapTask(taskID int) error {
-	args := CompleteTaskArgs{TaskID: taskID}
-	reply := struct{}{}
-
-	if ok := w.call("Coordinator.CompleteMapTask", &args, &reply); !ok {
-		return fmt.Errorf("failed to call Coordinator.CompleteMapTask")
-	}
-
-	return nil
-}
-
-func (w *Worker) callCompleteReduceTask(taskID int) error {
-	args := CompleteTaskArgs{TaskID: taskID}
-	reply := struct{}{}
-
-	if ok := w.call("Coordinator.CompleteReduceTask", &args, &reply); !ok {
-		return fmt.Errorf("failed to call Coordinator.CompleteReduceTask")
-	}
-
-	return nil
 }
 
 // use ihash(key) % NReduce to choose the reduce

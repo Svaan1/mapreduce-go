@@ -1,7 +1,8 @@
-package mr
+package queue
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 )
@@ -28,10 +29,8 @@ func (mq *MapQueue) AddNewTask(mt *MapTask) error {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
 
-	for _, id := range mq.ids {
-		if id == mt.ID {
-			return fmt.Errorf("task with ID %d already exists", mt.ID)
-		}
+	if slices.Contains(mq.ids, mt.ID) {
+		return fmt.Errorf("task with ID %d already exists", mt.ID)
 	}
 
 	mq.ids = append(mq.ids, mt.ID)
