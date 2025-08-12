@@ -8,7 +8,8 @@ import (
 )
 
 type ReduceTask struct {
-	ID int
+	ID    int
+	Files []string
 }
 
 type ReduceQueue struct {
@@ -17,8 +18,16 @@ type ReduceQueue struct {
 	pending   []*ReduceTask
 	completed []*ReduceTask
 
-	amount int
-	mu     sync.Mutex
+	amount  int
+	started bool
+	mu      sync.Mutex
+}
+
+func (rq *ReduceQueue) Start() {
+	rq.mu.Lock()
+	defer rq.mu.Unlock()
+
+	rq.started = true
 }
 
 func (rq *ReduceQueue) AddNewTask(mt *ReduceTask) error {
@@ -70,7 +79,8 @@ func (rq *ReduceQueue) Done() bool {
 	rq.mu.Lock()
 	defer rq.mu.Unlock()
 
-	return len(rq.idle) == 0 &&
+	return rq.started &&
+		len(rq.idle) == 0 &&
 		len(rq.pending) == 0 &&
 		len(rq.completed) == rq.amount
 }

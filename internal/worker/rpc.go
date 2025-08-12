@@ -19,8 +19,8 @@ func (w *Worker) callGetTask() (coordinator.GetTaskReply, error) {
 	return reply, nil
 }
 
-func (w *Worker) callCompleteMapTask(taskID int) error {
-	args := coordinator.CompleteTaskArgs{TaskID: taskID}
+func (w *Worker) callCompleteMapTask(taskID int, createdFiles map[int]string) error {
+	args := coordinator.CompleteMapTaskArgs{TaskID: taskID, CreatedFiles: createdFiles}
 	reply := struct{}{}
 
 	if ok := w.call("Coordinator.CompleteMapTask", &args, &reply); !ok {
@@ -31,7 +31,7 @@ func (w *Worker) callCompleteMapTask(taskID int) error {
 }
 
 func (w *Worker) callCompleteReduceTask(taskID int) error {
-	args := coordinator.CompleteTaskArgs{TaskID: taskID}
+	args := coordinator.CompleteReduceTask{TaskID: taskID}
 	reply := struct{}{}
 
 	if ok := w.call("Coordinator.CompleteReduceTask", &args, &reply); !ok {

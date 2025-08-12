@@ -2,6 +2,7 @@ package coordinator
 
 import (
 	"os"
+	"slices"
 	"strconv"
 
 	"github.com/svaan1/map-reduce-go/internal/queue"
@@ -13,7 +14,12 @@ type GetTaskReply struct {
 	ProcessDone bool
 }
 
-type CompleteTaskArgs struct {
+type CompleteMapTaskArgs struct {
+	TaskID       int
+	CreatedFiles map[int]string
+}
+
+type CompleteReduceTask struct {
 	TaskID int
 }
 
@@ -29,12 +35,33 @@ func (c *Coordinator) GetTask(_ struct{}, reply *GetTaskReply) error {
 	return nil
 }
 
-func (c *Coordinator) CompleteMapTask(args CompleteTaskArgs, _ *struct{}) error {
+func (c *Coordinator) CompleteMapTask(args CompleteMapTaskArgs, _ *struct{}) error {
+	if c.mq.Done() {
+		return nil
+	}
+
 	c.mq.CompleteTask(args.TaskID)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// add intermediate files to the list without duplicates
+	for reduceIdx, filename := range args.CreatedFiles {
+		list := c.intermediateFiles[reduceIdx]
+		if !slices.Contains(list, filename) {
+			list = append(list, filename)
+			c.intermediateFiles[reduceIdx] = list
+		}
+	}
+
 	return nil
 }
 
-func (c *Coordinator) CompleteReduceTask(args CompleteTaskArgs, _ *struct{}) error {
+func (c *Coordinator) CompleteReduceTask(args CompleteReduceTask, _ *struct{}) error {
+	if c.rq.Done() {
+		return nil
+	}
+
 	c.rq.CompleteTask(args.TaskID)
 	return nil
 }

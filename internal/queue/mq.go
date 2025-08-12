@@ -65,7 +65,7 @@ func (mq *MapQueue) CompleteTask(ID int) {
 		if task.ID == ID {
 			mq.completed = append(mq.completed, task)
 			mq.pending = append(mq.pending[:i], mq.pending[i+1:]...)
-			break
+			return
 		}
 	}
 }
