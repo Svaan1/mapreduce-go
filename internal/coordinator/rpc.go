@@ -1,6 +1,7 @@
 package coordinator
 
 import (
+	"log"
 	"os"
 	"strconv"
 
@@ -49,13 +50,16 @@ func (c *Coordinator) CompleteMapTask(args CompleteMapTaskArgs, _ *struct{}) err
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for partitionID, tmpPath := range args.CreatedFiles {
+	for partitionID, temp := range args.CreatedFiles {
+		dir := common.IntermediateDir(partitionID)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Printf("Failed to create directory %s: %v", dir, err)
+		}
+
 		finalPath := common.FinalMapOutPath(partitionID, completed.MapID)
 
-		if err := os.Rename(tmpPath, finalPath); err != nil {
-			_ = os.Remove(tmpPath)
-			continue
-		}
+		os.Rename(temp, finalPath)
+		os.Remove(temp)
 
 		c.intermediateFiles[partitionID] = append(
 			c.intermediateFiles[partitionID],
@@ -73,11 +77,14 @@ func (c *Coordinator) CompleteReduceTask(args CompleteReduceTask, _ *struct{}) e
 		return nil
 	}
 
-	tmp := args.CreatedFile
-	finalPath := common.FinalReduceOutPath(completed.ReduceID)
+	dir := common.FinalDir()
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Printf("Failed to create directory %s: %v", dir, err)
+	}
 
-	if err := os.Rename(tmp, finalPath); err != nil {
-		_ = os.Remove(tmp)
+	finalPath := common.FinalReduceOutPath(completed.ReduceID)
+	if err := os.Rename(args.CreatedFile, finalPath); err != nil {
+		os.Remove(args.CreatedFile)
 	}
 
 	return nil
@@ -88,7 +95,7 @@ func (c *Coordinator) Done() bool {
 }
 
 func CoordinatorSock() string {
-	s := "/var/tmp/5840-common-"
+	s := "/var/tmp/5840-mr-"
 	s += strconv.Itoa(os.Getuid())
 	return s
 }

@@ -33,7 +33,7 @@ func (w *Worker) executeReduceTask(r *queue.ReduceTask) {
 		}
 	}
 
-	outDir := common.FinalDir()
+	outDir := common.TempFinalDir()
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		log.Printf("Failed to create output directory %s: %v", outDir, err)
 		return

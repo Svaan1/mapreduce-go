@@ -40,7 +40,7 @@ func (w *Worker) executeMapTask(m *queue.MapTask) {
 	// Write all buckets into files
 	intermediateFiles := make(map[int]string)
 	for partitionID, bucket := range buckets {
-		dir := common.IntermediateDir(partitionID)
+		dir := common.TempIntermediateDir(partitionID)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			log.Printf("Failed to create directory %s: %v", dir, err)
 		}

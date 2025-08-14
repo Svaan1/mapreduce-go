@@ -6,16 +6,24 @@ import (
 	"github.com/google/uuid"
 )
 
+func TempIntermediateDir(partitionID int) string {
+	return fmt.Sprintf("temp/intermediate/partition-%d", partitionID)
+}
+
 func IntermediateDir(partitionID int) string {
-	return fmt.Sprintf("intermediate/partition-%d", partitionID)
+	return fmt.Sprintf("out/intermediate/partition-%d", partitionID)
+}
+
+func TempFinalDir() string {
+	return "temp/final"
 }
 
 func FinalDir() string {
-	return "final"
+	return "out/final"
 }
 
 func TempMapOutPath(partitionID int, mapID int, attemptID uuid.UUID) string {
-	dir := IntermediateDir(partitionID)
+	dir := TempIntermediateDir(partitionID)
 	return fmt.Sprintf("%s/mapper-%s-%d", dir, attemptID, mapID)
 }
 
@@ -25,7 +33,7 @@ func FinalMapOutPath(partitionID, mapID int) string {
 }
 
 func TempReduceOutPath(reduceID int, attemptID uuid.UUID) string {
-	dir := FinalDir()
+	dir := TempFinalDir()
 	return fmt.Sprintf("%s/%s-%d", dir, attemptID, reduceID)
 }
 

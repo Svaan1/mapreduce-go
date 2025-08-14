@@ -21,14 +21,14 @@ func nparallel(phase string) int {
 	// create a file so that other workers will see that
 	// we're running at the same time as them.
 	pid := os.Getpid()
-	myfilename := fmt.Sprintf("common-worker-%s-%d", phase, pid)
+	myfilename := fmt.Sprintf("mr-worker-%s-%d", phase, pid)
 	err := ioutil.WriteFile(myfilename, []byte("x"), 0666)
 	if err != nil {
 		panic(err)
 	}
 
 	// are any other workers running?
-	// find their PIDs by scanning directory for common-worker-XXX files.
+	// find their PIDs by scanning directory for mr-worker-XXX files.
 	dd, err := os.Open(".")
 	if err != nil {
 		panic(err)
@@ -40,7 +40,7 @@ func nparallel(phase string) int {
 	ret := 0
 	for _, name := range names {
 		var xpid int
-		pat := fmt.Sprintf("common-worker-%s-%%d", phase)
+		pat := fmt.Sprintf("mr-worker-%s-%%d", phase)
 		n, err := fmt.Sscanf(name, pat, &xpid)
 		if n == 1 && err == nil {
 			err := syscall.Kill(xpid, 0)

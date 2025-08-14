@@ -24,7 +24,7 @@ var count int
 
 func Map(filename string, contents string) []common.KeyValue {
 	me := os.Getpid()
-	f := fmt.Sprintf("common-worker-jobcount-%d-%d", me, count)
+	f := fmt.Sprintf("mr-worker-jobcount-%d-%d", me, count)
 	count++
 	err := ioutil.WriteFile(f, []byte("x"), 0666)
 	if err != nil {
@@ -41,7 +41,7 @@ func Reduce(key string, values []string) string {
 	}
 	invocations := 0
 	for _, f := range files {
-		if strings.HasPrefix(f.Name(), "common-worker-jobcount") {
+		if strings.HasPrefix(f.Name(), "mr-worker-jobcount") {
 			invocations++
 		}
 	}
