@@ -17,21 +17,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/svaan1/map-reduce-go/internal/mr"
+	"github.com/svaan1/map-reduce-go/internal/common"
 )
 
 var count int
 
-func Map(filename string, contents string) []mr.KeyValue {
+func Map(filename string, contents string) []common.KeyValue {
 	me := os.Getpid()
-	f := fmt.Sprintf("mr-worker-jobcount-%d-%d", me, count)
+	f := fmt.Sprintf("common-worker-jobcount-%d-%d", me, count)
 	count++
 	err := ioutil.WriteFile(f, []byte("x"), 0666)
 	if err != nil {
 		panic(err)
 	}
 	time.Sleep(time.Duration(2000+rand.Intn(3000)) * time.Millisecond)
-	return []mr.KeyValue{{Key: "a", Value: "x"}}
+	return []common.KeyValue{{Key: "a", Value: "x"}}
 }
 
 func Reduce(key string, values []string) string {
@@ -41,7 +41,7 @@ func Reduce(key string, values []string) string {
 	}
 	invocations := 0
 	for _, f := range files {
-		if strings.HasPrefix(f.Name(), "mr-worker-jobcount") {
+		if strings.HasPrefix(f.Name(), "common-worker-jobcount") {
 			invocations++
 		}
 	}

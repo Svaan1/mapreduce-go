@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/rpc"
 
+	"github.com/google/uuid"
 	"github.com/svaan1/map-reduce-go/internal/coordinator"
 )
 
@@ -19,8 +20,8 @@ func (w *Worker) callGetTask() (coordinator.GetTaskReply, error) {
 	return reply, nil
 }
 
-func (w *Worker) callCompleteMapTask(taskID int, createdFiles map[int]string) error {
-	args := coordinator.CompleteMapTaskArgs{TaskID: taskID, CreatedFiles: createdFiles}
+func (w *Worker) callCompleteMapTask(attemptID uuid.UUID, createdFiles map[int]string) error {
+	args := coordinator.CompleteMapTaskArgs{AttemptID: attemptID, CreatedFiles: createdFiles}
 	reply := struct{}{}
 
 	if ok := w.call("Coordinator.CompleteMapTask", &args, &reply); !ok {
@@ -30,8 +31,8 @@ func (w *Worker) callCompleteMapTask(taskID int, createdFiles map[int]string) er
 	return nil
 }
 
-func (w *Worker) callCompleteReduceTask(taskID int) error {
-	args := coordinator.CompleteReduceTask{TaskID: taskID}
+func (w *Worker) callCompleteReduceTask(attemptID uuid.UUID, createdFile string) error {
+	args := coordinator.CompleteReduceTask{AttemptID: attemptID, CreatedFile: createdFile}
 	reply := struct{}{}
 
 	if ok := w.call("Coordinator.CompleteReduceTask", &args, &reply); !ok {

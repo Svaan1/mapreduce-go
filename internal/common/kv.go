@@ -1,4 +1,4 @@
-package mr
+package common
 
 type KeyValue struct {
 	Key   string

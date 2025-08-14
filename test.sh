@@ -56,7 +56,7 @@ SEQ_CMD="$CMD_DIR/sequential/main"
 COORD_CMD="$CMD_DIR/coordinator/main"
 WORKER_CMD="$CMD_DIR/worker/main"
 TEST_TMP_DIR="tmp"
-FINAL_OUT_DIR="out/final"
+FINAL_OUT_DIR="final"
 
 # Global state for tracking test failures.
 FAILED_ANY=0

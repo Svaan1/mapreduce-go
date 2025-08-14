@@ -5,11 +5,15 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type ReduceTask struct {
-	ID    int
-	Files []string
+	AttemptID   uuid.UUID
+	AttemptTime time.Time
+	ReduceID    int
+	Files       []string
 }
 
 type ReduceQueue struct {
@@ -23,6 +27,21 @@ type ReduceQueue struct {
 	mu      sync.Mutex
 }
 
+func NewReduceQueue() *ReduceQueue {
+	rq := ReduceQueue{
+		ids:       []int{},
+		idle:      []*ReduceTask{},
+		pending:   []*ReduceTask{},
+		completed: []*ReduceTask{},
+		amount:    0,
+		started:   false,
+	}
+
+	go rq.trackCompletions()
+
+	return &rq
+}
+
 func (rq *ReduceQueue) Start() {
 	rq.mu.Lock()
 	defer rq.mu.Unlock()
@@ -34,11 +53,11 @@ func (rq *ReduceQueue) AddNewTask(mt *ReduceTask) error {
 	rq.mu.Lock()
 	defer rq.mu.Unlock()
 
-	if slices.Contains(rq.ids, mt.ID) {
-		return fmt.Errorf("task with ID %d already exists", mt.ID)
+	if slices.Contains(rq.ids, mt.ReduceID) {
+		return fmt.Errorf("task with ReduceID %d already exists", mt.ReduceID)
 	}
 
-	rq.ids = append(rq.ids, mt.ID)
+	rq.ids = append(rq.ids, mt.ReduceID)
 	rq.idle = append(rq.idle, mt)
 	rq.amount++
 
@@ -54,25 +73,28 @@ func (rq *ReduceQueue) FetchIdleTask() *ReduceTask {
 	}
 
 	task := rq.idle[0]
+	task.AttemptID = uuid.New()
+	task.AttemptTime = time.Now()
+
 	rq.idle = rq.idle[1:]
 	rq.pending = append(rq.pending, task)
-
-	go rq.trackCompletion(task)
 
 	return task
 }
 
-func (rq *ReduceQueue) CompleteTask(ID int) {
+func (rq *ReduceQueue) CompleteTask(attemptID uuid.UUID) (ReduceTask, error) {
 	rq.mu.Lock()
 	defer rq.mu.Unlock()
 
 	for i, task := range rq.pending {
-		if task.ID == ID {
+		if task.AttemptID == attemptID {
 			rq.completed = append(rq.completed, task)
 			rq.pending = append(rq.pending[:i], rq.pending[i+1:]...)
-			break
+			return *task, nil
 		}
 	}
+
+	return ReduceTask{}, fmt.Errorf("stale attempt")
 }
 
 func (rq *ReduceQueue) Done() bool {
@@ -85,19 +107,28 @@ func (rq *ReduceQueue) Done() bool {
 		len(rq.completed) == rq.amount
 }
 
-func (mq *ReduceQueue) trackCompletion(mt *ReduceTask) {
-	timer := time.NewTimer(taskTimeout)
-	defer timer.Stop()
-	<-timer.C
+func (rq *ReduceQueue) trackCompletions() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 
-	mq.mu.Lock()
-	defer mq.mu.Unlock()
+	for {
+		<-ticker.C
+		rq.mu.Lock()
 
-	for i, task := range mq.pending {
-		if task.ID == mt.ID {
-			mq.pending = append(mq.pending[:i], mq.pending[i+1:]...)
-			mq.idle = append(mq.idle, mt)
-			return
+		var fresh []*ReduceTask
+		var stale []*ReduceTask
+
+		for _, task := range rq.pending {
+			if time.Since(task.AttemptTime) >= taskTimeout {
+				stale = append(stale, task)
+			} else {
+				fresh = append(fresh, task)
+			}
 		}
+
+		rq.pending = fresh
+		rq.idle = append(rq.idle, stale...)
+
+		rq.mu.Unlock()
 	}
 }

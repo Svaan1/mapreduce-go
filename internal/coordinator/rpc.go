@@ -2,9 +2,10 @@ package coordinator
 
 import (
 	"os"
-	"slices"
 	"strconv"
 
+	"github.com/google/uuid"
+	"github.com/svaan1/map-reduce-go/internal/common"
 	"github.com/svaan1/map-reduce-go/internal/queue"
 )
 
@@ -15,12 +16,13 @@ type GetTaskReply struct {
 }
 
 type CompleteMapTaskArgs struct {
-	TaskID       int
+	AttemptID    uuid.UUID
 	CreatedFiles map[int]string
 }
 
 type CompleteReduceTask struct {
-	TaskID int
+	AttemptID   uuid.UUID
+	CreatedFile string
 }
 
 func (c *Coordinator) GetTask(_ struct{}, reply *GetTaskReply) error {
@@ -36,33 +38,48 @@ func (c *Coordinator) GetTask(_ struct{}, reply *GetTaskReply) error {
 }
 
 func (c *Coordinator) CompleteMapTask(args CompleteMapTaskArgs, _ *struct{}) error {
-	if c.mq.Done() {
+	completed, err := c.mq.CompleteTask(args.AttemptID)
+	if err != nil {
+		for _, tmp := range args.CreatedFiles {
+			_ = os.Remove(tmp)
+		}
 		return nil
 	}
-
-	c.mq.CompleteTask(args.TaskID)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// add intermediate files to the list without duplicates
-	for reduceIdx, filename := range args.CreatedFiles {
-		list := c.intermediateFiles[reduceIdx]
-		if !slices.Contains(list, filename) {
-			list = append(list, filename)
-			c.intermediateFiles[reduceIdx] = list
+	for partitionID, tmpPath := range args.CreatedFiles {
+		finalPath := common.FinalMapOutPath(partitionID, completed.MapID)
+
+		if err := os.Rename(tmpPath, finalPath); err != nil {
+			_ = os.Remove(tmpPath)
+			continue
 		}
+
+		c.intermediateFiles[partitionID] = append(
+			c.intermediateFiles[partitionID],
+			finalPath,
+		)
 	}
 
 	return nil
 }
 
 func (c *Coordinator) CompleteReduceTask(args CompleteReduceTask, _ *struct{}) error {
-	if c.rq.Done() {
+	completed, err := c.rq.CompleteTask(args.AttemptID)
+	if err != nil {
+		os.Remove(args.CreatedFile)
 		return nil
 	}
 
-	c.rq.CompleteTask(args.TaskID)
+	tmp := args.CreatedFile
+	finalPath := common.FinalReduceOutPath(completed.ReduceID)
+
+	if err := os.Rename(tmp, finalPath); err != nil {
+		_ = os.Remove(tmp)
+	}
+
 	return nil
 }
 
@@ -71,7 +88,7 @@ func (c *Coordinator) Done() bool {
 }
 
 func CoordinatorSock() string {
-	s := "/var/tmp/5840-mr-"
+	s := "/var/tmp/5840-common-"
 	s += strconv.Itoa(os.Getuid())
 	return s
 }

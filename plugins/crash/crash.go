@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/svaan1/map-reduce-go/internal/mr"
+	"github.com/svaan1/map-reduce-go/internal/common"
 )
 
 func maybeCrash() {
@@ -34,14 +34,14 @@ func maybeCrash() {
 	}
 }
 
-func Map(filename string, contents string) []mr.KeyValue {
+func Map(filename string, contents string) []common.KeyValue {
 	maybeCrash()
 
-	kva := []mr.KeyValue{}
-	kva = append(kva, mr.KeyValue{Key: "a", Value: filename})
-	kva = append(kva, mr.KeyValue{Key: "b", Value: strconv.Itoa(len(filename))})
-	kva = append(kva, mr.KeyValue{Key: "c", Value: strconv.Itoa(len(contents))})
-	kva = append(kva, mr.KeyValue{Key: "d", Value: "xyzzy"})
+	kva := []common.KeyValue{}
+	kva = append(kva, common.KeyValue{Key: "a", Value: filename})
+	kva = append(kva, common.KeyValue{Key: "b", Value: strconv.Itoa(len(filename))})
+	kva = append(kva, common.KeyValue{Key: "c", Value: strconv.Itoa(len(contents))})
+	kva = append(kva, common.KeyValue{Key: "d", Value: "xyzzy"})
 	return kva
 }
 

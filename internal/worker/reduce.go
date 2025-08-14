@@ -6,30 +6,23 @@ import (
 	"log"
 	"os"
 
+	"github.com/svaan1/map-reduce-go/internal/common"
 	"github.com/svaan1/map-reduce-go/internal/queue"
 )
 
 func (w *Worker) executeReduceTask(r *queue.ReduceTask) {
-	dir := fmt.Sprintf("out/intermediate/reduce-%d", r.ID)
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		log.Printf("Failed to read directory %s: %v", dir, err)
-		return
-	}
-
 	kvMap := make(map[string][]string)
 
-	for _, file := range files {
-		fpath := fmt.Sprintf("%s/%s", dir, file.Name())
-		f, err := os.Open(fpath)
+	for _, file := range r.Files {
+		f, err := os.Open(file)
 		if err != nil {
-			log.Printf("Failed to open file %s: %v", fpath, err)
+			log.Printf("Failed to open file %s: %v", file, err)
 			continue
 		}
 
 		var bucket map[string][]string
 		if err := json.NewDecoder(f).Decode(&bucket); err != nil {
-			log.Printf("Failed to decode JSON from %s: %v", fpath, err)
+			log.Printf("Failed to decode JSON from %s: %v", file, err)
 			f.Close()
 			continue
 		}
@@ -40,14 +33,13 @@ func (w *Worker) executeReduceTask(r *queue.ReduceTask) {
 		}
 	}
 
-	// Apply reduce function and write output
-	outDir := "out/final"
+	outDir := common.FinalDir()
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		log.Printf("Failed to create output directory %s: %v", outDir, err)
 		return
 	}
 
-	outFile := fmt.Sprintf("%s/%d", outDir, r.ID)
+	outFile := common.TempReduceOutPath(r.ReduceID, r.AttemptID)
 	file, err := os.Create(outFile)
 	if err != nil {
 		log.Printf("Failed to create output file %s: %v", outFile, err)
@@ -60,5 +52,5 @@ func (w *Worker) executeReduceTask(r *queue.ReduceTask) {
 		fmt.Fprintf(file, "%v %v\n", k, output)
 	}
 
-	w.callCompleteReduceTask(r.ID)
+	w.callCompleteReduceTask(r.AttemptID, outFile)
 }

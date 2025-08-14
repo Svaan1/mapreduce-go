@@ -25,8 +25,8 @@ type Coordinator struct {
 
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{
-		mq: &queue.MapQueue{},
-		rq: &queue.ReduceQueue{},
+		mq: queue.NewMapQueue(),
+		rq: queue.NewReduceQueue(),
 
 		files:   files,
 		nReduce: nReduce,
@@ -57,7 +57,7 @@ func (c *Coordinator) server() {
 func (c *Coordinator) addMapTasks() {
 	for i, file := range c.files {
 		task := &queue.MapTask{
-			ID:       i,
+			MapID:    i,
 			NReduce:  c.nReduce,
 			Filename: file,
 		}
@@ -75,8 +75,8 @@ func (c *Coordinator) addReduceTasks() {
 
 	for id, files := range c.intermediateFiles {
 		task := &queue.ReduceTask{
-			ID:    id,
-			Files: files,
+			ReduceID: id,
+			Files:    files,
 		}
 
 		if err := c.rq.AddNewTask(task); err != nil {

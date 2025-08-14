@@ -6,16 +6,16 @@ import (
 	"net/rpc"
 	"time"
 
-	"github.com/svaan1/map-reduce-go/internal/mr"
+	"github.com/svaan1/map-reduce-go/internal/common"
 )
 
 type Worker struct {
 	client  *rpc.Client
-	mapf    func(string, string) []mr.KeyValue
+	mapf    func(string, string) []common.KeyValue
 	reducef func(string, []string) string
 }
 
-func NewWorker(mapf func(string, string) []mr.KeyValue, reducef func(string, []string) string) Worker {
+func NewWorker(mapf func(string, string) []common.KeyValue, reducef func(string, []string) string) Worker {
 	w := Worker{
 		client:  nil,
 		mapf:    mapf,
@@ -43,12 +43,12 @@ func (w *Worker) Work() {
 		}
 
 		if task.MapTask != nil {
-			log.Printf("Successfully got map task %d", task.MapTask.ID)
+			log.Printf("Successfully got map task %d", task.MapTask.MapID)
 			w.executeMapTask(task.MapTask)
 		}
 
 		if task.ReduceTask != nil {
-			log.Printf("Successfully got reduce task %d", task.ReduceTask.ID)
+			log.Printf("Successfully got reduce task %d", task.ReduceTask.ReduceID)
 			w.executeReduceTask(task.ReduceTask)
 		}
 	}

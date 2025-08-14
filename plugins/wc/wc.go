@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/svaan1/map-reduce-go/internal/mr"
+	"github.com/svaan1/map-reduce-go/internal/common"
 )
 
 // The map function is called once for each file of input. The first
@@ -19,16 +19,16 @@ import (
 // file's complete contents. You should ignore the input file name,
 // and look only at the contents argument. The return value is a slice
 // of key/value pairs.
-func Map(filename string, contents string) []mr.KeyValue {
+func Map(filename string, contents string) []common.KeyValue {
 	// function to detect word separators.
 	ff := func(r rune) bool { return !unicode.IsLetter(r) }
 
 	// split contents into an array of words.
 	words := strings.FieldsFunc(contents, ff)
 
-	kva := []mr.KeyValue{}
+	kva := []common.KeyValue{}
 	for _, w := range words {
-		kv := mr.KeyValue{Key: w, Value: "1"}
+		kv := common.KeyValue{Key: w, Value: "1"}
 		kva = append(kva, kv)
 	}
 	return kva
